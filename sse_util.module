@@ -1,0 +1,76 @@
+<?php
+
+/**
+ * implement hook_taxonomy_term_update()
+ */
+function sse_util_taxonomy_term_update($term) {
+  _sse_util_taxonomy_clear_cache($term->vocabulary_machine_name);
+}
+
+/**
+ * implement hook_taxonomy_term_insert()
+ */
+function sse_util_taxonomy_term_insert($term) {
+  _sse_util_taxonomy_clear_cache($term->vocabulary_machine_name);
+}
+
+/**
+ * implement hook_taxonomy_term_delete()
+ */
+function sse_util_taxonomy_term_delete($term) {
+  _sse_util_taxonomy_clear_cache($term->vocabulary_machine_name);
+}
+
+/**
+ * 清除一个 taxonomy 相关的 cache
+ */
+function _sse_util_taxonomy_clear_cache($machine_name) {
+  cache_clear_all('sse_util:taxonomy_tree:'.$machine_name, 'cache', true);
+}
+
+/**
+ * 获得嵌套的 taxonomy term tree
+ */
+function sse_util_get_nested_taxonomy_tree($machine_name, $testHidden = false) {
+  $cid = 'sse_util:taxonomy_tree:'.$machine_name.':'.$GLOBALS['language']->language;
+  $cache = cache_get($cid);
+  if ($cache && isset($cache->data)) {
+    return $cache->data;
+  }
+
+  $vocabulary = taxonomy_vocabulary_machine_name_load($machine_name);
+  $tree = taxonomy_get_tree($vocabulary->vid);
+  $list = [];
+  $nested = [];
+  foreach ($tree as $term) {
+    if ($testHidden) {
+      $termObj = taxonomy_term_load($term->tid);
+      if (isset($termObj->field_taxonomy_target_hidden) && $termObj->field_taxonomy_target_hidden[LANGUAGE_NONE][0]['value'] == 1) {
+        continue;
+      }
+    }
+    $term->children = [];
+    $list[$term->tid] = $term;
+  }
+  uasort($list, function ($a, $b) {
+    return $a->weight > $b->weight;
+  });
+  foreach ($list as $tid => &$term) {
+    foreach ($term->parents as $ptid) {
+      if ($ptid == '0') {
+        $nested[$tid] = $term;
+      } elseif (isset($list[$ptid])) {
+        $list[$ptid]->children[$tid] = $term;
+      }
+    }
+  }
+  unset($term);
+  $ret = [
+    'vocabulary' => $vocabulary,
+    'machine_name' => $machine_name,
+    'tree' => $nested,
+  ];
+
+  cache_set($cid, $ret);
+  return $ret;
+}

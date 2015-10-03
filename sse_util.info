@@ -1,0 +1,5 @@
+name = SSE Util
+description = Common utility functions for sseweb modules.
+version = 7.x-0.1
+core = 7.x
+package = SSE
